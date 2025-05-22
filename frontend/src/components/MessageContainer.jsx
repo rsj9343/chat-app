@@ -3,7 +3,8 @@ import { useAuthStore } from '../store/authStore'
 import axios from 'axios'
 import { toast } from 'react-hot-toast'
 import { format } from 'date-fns'
-import { PaperAirplaneIcon, PhotoIcon } from '@heroicons/react/24/solid'
+import { PaperAirplaneIcon, PhotoIcon, FaceSmileIcon } from '@heroicons/react/24/solid'
+import EmojiPicker from 'emoji-picker-react'
 
 export default function MessageContainer({ socket }) {
   const [messages, setMessages] = useState([])
@@ -11,8 +12,10 @@ export default function MessageContainer({ socket }) {
   const [sending, setSending] = useState(false)
   const [selectedImage, setSelectedImage] = useState(null)
   const [messageText, setMessageText] = useState('')
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const messagesEndRef = useRef(null)
   const fileInputRef = useRef(null)
+  const emojiButtonRef = useRef(null)
   const authUser = useAuthStore((state) => state.authUser)
   const selectedUser = useAuthStore((state) => state.selectedUser)
 
@@ -49,6 +52,21 @@ export default function MessageContainer({ socket }) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        showEmojiPicker &&
+        emojiButtonRef.current &&
+        !emojiButtonRef.current.contains(event.target)
+      ) {
+        setShowEmojiPicker(false)
+      }
+    }
+
+    document.addEventListener('click', handleClickOutside)
+    return () => document.removeEventListener('click', handleClickOutside)
+  }, [showEmojiPicker])
+
   const handleSendMessage = async (e) => {
     e.preventDefault()
     if ((!messageText.trim() && !selectedImage) || sending) return
@@ -72,11 +90,16 @@ export default function MessageContainer({ socket }) {
       setMessages((prev) => [...prev, data])
       setMessageText('')
       setSelectedImage(null)
+      setShowEmojiPicker(false)
     } catch (error) {
       toast.error('Failed to send message')
     } finally {
       setSending(false)
     }
+  }
+
+  const onEmojiClick = (emojiData) => {
+    setMessageText((prev) => prev + emojiData.emoji)
   }
 
   if (!selectedUser) {
@@ -148,7 +171,7 @@ export default function MessageContainer({ socket }) {
         <div ref={messagesEndRef} />
       </div>
 
-      <form onSubmit={handleSendMessage} className="border-t p-4">
+      <form onSubmit={handleSendMessage} className="relative border-t p-4">
         {selectedImage && (
           <div className="mb-2">
             <img
@@ -181,6 +204,21 @@ export default function MessageContainer({ socket }) {
             className="hidden"
             ref={fileInputRef}
           />
+          <div className="relative" ref={emojiButtonRef}>
+            <button
+              type="button"
+              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+              className="btn bg-gray-100 hover:bg-gray-200"
+              disabled={sending}
+            >
+              <FaceSmileIcon className="h-5 w-5" />
+            </button>
+            {showEmojiPicker && (
+              <div className="absolute bottom-full right-0 mb-2">
+                <EmojiPicker onEmojiClick={onEmojiClick} />
+              </div>
+            )}
+          </div>
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
