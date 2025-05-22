@@ -8,6 +8,7 @@ import { PaperAirplaneIcon, PhotoIcon } from '@heroicons/react/24/solid'
 export default function MessageContainer({ socket }) {
   const [messages, setMessages] = useState([])
   const [loading, setLoading] = useState(false)
+  const [sending, setSending] = useState(false)
   const [selectedImage, setSelectedImage] = useState(null)
   const [messageText, setMessageText] = useState('')
   const messagesEndRef = useRef(null)
@@ -17,11 +18,16 @@ export default function MessageContainer({ socket }) {
 
   useEffect(() => {
     socket?.on('newMessage', (message) => {
-      setMessages((prev) => [...prev, message])
+      if (
+        message.senderId === selectedUser?._id ||
+        message.receiverId === selectedUser?._id
+      ) {
+        setMessages((prev) => [...prev, message])
+      }
     })
 
     return () => socket?.off('newMessage')
-  }, [socket])
+  }, [socket, selectedUser?._id])
 
   useEffect(() => {
     const getMessages = async () => {
@@ -45,9 +51,10 @@ export default function MessageContainer({ socket }) {
 
   const handleSendMessage = async (e) => {
     e.preventDefault()
-    if (!messageText.trim() && !selectedImage) return
+    if ((!messageText.trim() && !selectedImage) || sending) return
 
     try {
+      setSending(true)
       let image = null
       if (selectedImage) {
         const reader = new FileReader()
@@ -58,7 +65,7 @@ export default function MessageContainer({ socket }) {
       }
 
       const { data } = await axios.post(`/api/message/send/${selectedUser._id}`, {
-        text: messageText,
+        text: messageText.trim(),
         image,
       })
 
@@ -67,19 +74,21 @@ export default function MessageContainer({ socket }) {
       setSelectedImage(null)
     } catch (error) {
       toast.error('Failed to send message')
+    } finally {
+      setSending(false)
     }
   }
 
   if (!selectedUser) {
     return (
-      <div className="flex flex-1 items-center justify-center">
+      <div className="flex flex-1 items-center justify-center bg-gray-50">
         <p className="text-gray-500">Select a user to start chatting</p>
       </div>
     )
   }
 
   return (
-    <div className="flex flex-1 flex-col">
+    <div className="flex flex-1 flex-col bg-white">
       <div className="flex items-center border-b p-4">
         <div className="flex items-center gap-2">
           <img
@@ -95,6 +104,10 @@ export default function MessageContainer({ socket }) {
         {loading ? (
           <div className="flex h-full items-center justify-center">
             <p className="text-gray-500">Loading messages...</p>
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="flex h-full items-center justify-center">
+            <p className="text-gray-500">No messages yet</p>
           </div>
         ) : (
           messages.map((message) => (
@@ -146,7 +159,7 @@ export default function MessageContainer({ socket }) {
             <button
               type="button"
               onClick={() => setSelectedImage(null)}
-              className="mt-1 text-xs text-red-500"
+              className="mt-1 text-xs text-red-500 hover:text-red-600"
             >
               Remove
             </button>
@@ -159,6 +172,7 @@ export default function MessageContainer({ socket }) {
             onChange={(e) => setMessageText(e.target.value)}
             placeholder="Type a message..."
             className="input flex-1"
+            disabled={sending}
           />
           <input
             type="file"
@@ -171,10 +185,15 @@ export default function MessageContainer({ socket }) {
             type="button"
             onClick={() => fileInputRef.current?.click()}
             className="btn bg-gray-100 hover:bg-gray-200"
+            disabled={sending}
           >
             <PhotoIcon className="h-5 w-5" />
           </button>
-          <button type="submit" className="btn btn-primary">
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={(!messageText.trim() && !selectedImage) || sending}
+          >
             <PaperAirplaneIcon className="h-5 w-5" />
           </button>
         </div>
